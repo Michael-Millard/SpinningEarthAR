@@ -18,7 +18,7 @@ void main()
     vec3 color = texture(diffuseMap, TexCoords).rgb;  
 
     // Ambient
-    vec3 ambient = 0.1 * color;
+    vec3 ambient = 0.8 * color;
 
     // Diffuse
     vec3 norm = normalize(Normal);
@@ -30,7 +30,7 @@ void main()
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 halfwayDir = normalize(lightDir + viewDir);
     float spec = pow(max(dot(norm, halfwayDir), 0.0), shininess);
-    vec3 specular = vec3(0.3) * spec; // Adjust specular strength
+    vec3 specular = vec3(0.1) * spec; // Adjust specular strength
 
     vec3 result = ambient + diffuse + specular;
     FragColor = vec4(result, 1.0);
