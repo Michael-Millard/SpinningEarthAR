@@ -1,6 +1,13 @@
 # SpinningEarthAR
 Lots TODO. Right now it just renders the Earth with an orbiting Spitfire over a black background. Textures and shading are working. Model transforms are working: Earth spins, plane orbits, propeller spins independently.
 
+<table>
+  <tr>
+    <td><img src="media/ss1.png" width="400"/></td>
+    <td><img src="media/ss2.png" width="400"/></td>
+  </tr>
+</table>
+
 ## Next steps:
 1. Read in frames: video or webcam 
 2. Render full screen quad or tri so that frame takes up whole screen 
