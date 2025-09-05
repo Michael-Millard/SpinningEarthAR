@@ -73,8 +73,8 @@ float elapsed_time = 0.0f;
 bool HANDS_ENABLED = true;
 
 // Model names
-#define EARTH_MODEL "models/earth.obj"
-#define SPITFIRE_MODEL "models/spitfire.obj"
+#define EARTH_MODEL "3d_models/earth.obj"
+#define SPITFIRE_MODEL "3d_models/spitfire.obj"
 
 // Spitfire orbit params
 const float PLANE_ORBIT_RADIUS = 3.5f;     // distance from Earth's center
@@ -210,7 +210,7 @@ int main() {
     camera.setZoomEnabled(false);
 
     // Webcam (For device name, run: $ v4l2-ctl --list-devices)
-    MyWebcam webcam("Webcam", "/dev/video2", SCREEN_WIDTH, SCREEN_HEIGHT);
+    MyWebcam webcam("Webcam", "/dev/video0", SCREEN_WIDTH, SCREEN_HEIGHT);
     cv::Mat current_frame;
     std::string err_msg;
     int initRead = webcam.ReadFrame(current_frame, err_msg);
@@ -271,13 +271,13 @@ int main() {
     const float CAM_UPDATE_INTERVAL = 1.0f / 30.0f; // ~30 FPS
     float lastCamUpdateTime = 0.0f;
 
-    // Hand tracker setup (models need to be provided by you; ONNX paths)
+    // Hand tracker setup (detector ONNX + Caffe landmark)
     HandTracker handTracker;
     std::string handErr;
-    // TODO: Replace with actual ONNX paths (palm detector + landmark models)
-    std::string protoTxt = "caffe/hands/pose_deploy.prototxt";
-    std::string caffeModel = "caffe/hands/pose_iter_102000.caffemodel";
-    bool handsReady = handTracker.load(protoTxt, caffeModel, 256, 224, handErr);
+    std::string detOnnx = "detection_models/hand_detection/yolo11n.onnx";
+    std::string protoTxt = "detection_models/hand_landmarks/pose_deploy.prototxt";
+    std::string caffeModel = "detection_models/hand_landmarks/pose_iter_102000.caffemodel";
+    bool handsReady = handTracker.load(detOnnx, protoTxt, caffeModel, 640, 368, handErr);
     if (!handsReady) {
         std::cerr << "HandTracker load failed: " << handErr << std::endl;
         HANDS_ENABLED = false;
@@ -285,6 +285,10 @@ int main() {
         // Prefer GPU if available; else fall back to default
         handTracker.setBackendTarget(cv::dnn::DNN_BACKEND_OPENCV, cv::dnn::DNN_TARGET_CPU);
     }
+
+    // Last known Earth position in world (initialized at origin)
+    glm::vec3 lastEarthPos = glm::vec3(0.0f);
+    bool hasEarthPos = false;
 
     // Render loop
     while (!glfwWindowShouldClose(window))
@@ -307,7 +311,7 @@ int main() {
         processUserInput(window);
 
         // Update webcam texture (and optionally overlay hands) at most ~30 fps
-        std::vector<HandResult> hands;
+    std::vector<HandResult> hands;
         if ((elapsed_time - lastCamUpdateTime) >= CAM_UPDATE_INTERVAL) {
             if (webcam.ReadFrame(current_frame, err_msg) == 0) {
                 // Run hand tracker on the fresh frame
@@ -365,21 +369,19 @@ int main() {
         // All have same model, view and projection 
         glm::mat4 model = glm::identity<glm::mat4>();
 
-        // Input: pixel (x, y) from hand landmark
-        float x = hands[0].landmarks[9].pt.x;
-        float y = hands[0].landmarks[9].pt.y;
-
-        // TRANSLATE EARTH TO CENTRE OF HAND USING (x, y)
-        // Get the 9th landmark (be careful: 0-based index is 8 if your list is 0-based)
-        glm::vec2 palmVideoPx = glm::vec2(x, y);
-
-        // Map to window pixels (or skip if not letterboxed)
-        glm::ivec2 videoSize(camW, camH);     // your webcam frame size
-        glm::ivec2 winSize(SCREEN_WIDTH, SCREEN_HEIGHT); // your GLFW window size
-        //glm::vec2 palmWinPx = videoPxToWindowPx(videoSize, winSize, palmVideoPx);
-        glm::vec2 palmWinPx = palmVideoPx; // Assume no letterboxing for simplicity
-        // Choose a plane distance in front of camera (e.g., where you’d like the globe to live)
-        glm::vec3 worldPos = screenToWorldOnPlane(view, projection, winSize.x, winSize.y, palmWinPx, z_pos_init);
+        // If we have a detected hand with enough landmarks, anchor Earth to palm center
+        if (HANDS_ENABLED && !hands.empty() && hands[0].landmarks.size() > 9) {
+            const auto& p = hands[0].landmarks[9].pt; // palm center landmark in image pixels
+            if (p.x >= 0 && p.y >= 0 && p.x < camW && p.y < camH) {
+                glm::vec2 palmVideoPx(p.x, p.y);
+                glm::ivec2 winSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+                glm::vec2 palmWinPx = palmVideoPx; // assuming webcam fills window; adjust if letterboxed
+                glm::vec3 worldPos = screenToWorldOnPlane(view, projection, winSize.x, winSize.y, palmWinPx, z_pos_init);
+                lastEarthPos = worldPos;
+                hasEarthPos = true;
+            }
+        }
+        glm::vec3 worldPos = hasEarthPos ? lastEarthPos : glm::vec3(0.0f);
 
 
         // Slightly scale down to keep fully within the frame
