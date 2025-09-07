@@ -23,6 +23,16 @@
 void frameBufferSizeCallback(GLFWwindow* window, int width, int height);
 void processUserInput(GLFWwindow* window);
 
+static void drawBoundingBoxOverlay(cv::Mat& frame, const std::vector<HandResult>& hands) {
+    if (frame.empty()) return;
+    const cv::Scalar kBoxColor(0, 255, 255); // yellow (B,G,R)
+    for (const auto& h : hands) {
+        if (h.roi.area() > 0) {
+            cv::rectangle(frame, h.roi, kBoxColor, 2, cv::LINE_AA);
+        }
+    }
+}
+
 // Overlay: draw detected hands on a BGR frame
 static void drawHandsOverlay(cv::Mat& frame, const std::vector<HandResult>& hands) {
     if (frame.empty()) return;
@@ -77,9 +87,9 @@ bool HANDS_ENABLED = true;
 #define SPITFIRE_MODEL "3d_models/spitfire.obj"
 
 // Spitfire orbit params
-const float PLANE_ORBIT_RADIUS = 3.5f;     // distance from Earth's center
-const float PLANE_ORBIT_SPEED_DEG = 30.0f; // degrees per second
-const float PLANE_SCALE = 0.25f;           // relative size vs Earth
+const float PLANE_ORBIT_RADIUS = 5.0f;     // distance from Earth's center
+const float PLANE_ORBIT_SPEED_DEG = 60.0f; // degrees per second
+const float PLANE_SCALE = 0.35f;           // relative size vs Earth
 
 // Propeller animation params
 const float PROPELLER_RPS = 2.0f;         // revolutions per second
@@ -103,13 +113,7 @@ int setupGLFW(GLFWwindow** window) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_DECORATED, GLFW_TRUE); // Show title bar (windowed)
-
-    // Screen params
-    //GLFWmonitor* my_monitor = glfwGetPrimaryMonitor();
-    //const GLFWvidmode* mode = glfwGetVideoMode(my_monitor);
-    //SCREEN_WIDTH = mode->width; 
-    //SCREEN_HEIGHT = mode->height;
+    glfwWindowHint(GLFW_DECORATED, GLFW_TRUE); 
 
     // glfw window creation
     GLFWwindow* glfw_window = glfwCreateWindow(
@@ -131,8 +135,8 @@ int setupGLFW(GLFWwindow** window) {
     // Callback functions
     glfwSetFramebufferSizeCallback(glfw_window, frameBufferSizeCallback);
 
-    // Disable cursor
-    glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    // Show cursor, for debugging
+    glfwSetInputMode(glfw_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 
     // Load all OpenGL function pointers with GLAD
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
@@ -147,6 +151,7 @@ int setupGLFW(GLFWwindow** window) {
     glEnable(GL_CULL_FACE);     // Cull back faces to reduce fragment work
     glCullFace(GL_BACK);
     glFrontFace(GL_CCW);
+
     // Initialize viewport to current framebuffer size
     int fbw = 0, fbh = 0;
     glfwGetFramebufferSize(glfw_window, &fbw, &fbh);
@@ -274,7 +279,7 @@ int main() {
     // Hand tracker setup (detector ONNX + Caffe landmark)
     HandTracker handTracker;
     std::string handErr;
-    std::string detOnnx = "detection_models/hand_detection/yolo11n.onnx";
+    std::string detOnnx = "detection_models/hand_detection/yolo11n_hand.onnx";
     std::string protoTxt = "detection_models/hand_landmarks/pose_deploy.prototxt";
     std::string caffeModel = "detection_models/hand_landmarks/pose_iter_102000.caffemodel";
     bool handsReady = handTracker.load(detOnnx, protoTxt, caffeModel, 640, 368, handErr);
@@ -283,7 +288,7 @@ int main() {
         HANDS_ENABLED = false;
     } else {
         // Prefer GPU if available; else fall back to default
-        handTracker.setBackendTarget(cv::dnn::DNN_BACKEND_OPENCV, cv::dnn::DNN_TARGET_CPU);
+        handTracker.setBackendTarget(cv::dnn::DNN_BACKEND_CUDA, cv::dnn::DNN_TARGET_CUDA);
     }
 
     // Last known Earth position in world (initialized at origin)
@@ -311,7 +316,7 @@ int main() {
         processUserInput(window);
 
         // Update webcam texture (and optionally overlay hands) at most ~30 fps
-    std::vector<HandResult> hands;
+        std::vector<HandResult> hands;
         if ((elapsed_time - lastCamUpdateTime) >= CAM_UPDATE_INTERVAL) {
             if (webcam.ReadFrame(current_frame, err_msg) == 0) {
                 // Run hand tracker on the fresh frame
@@ -319,6 +324,7 @@ int main() {
                     hands = handTracker.infer(current_frame, 5);
                     // Draw overlay directly on the frame so it appears in the background texture
                     drawHandsOverlay(current_frame, hands);
+                    drawBoundingBoxOverlay(current_frame, hands);
                 }
 
                 // Upload to GL texture
@@ -369,9 +375,23 @@ int main() {
         // All have same model, view and projection 
         glm::mat4 model = glm::identity<glm::mat4>();
 
+        bool followHands = false;
         // If we have a detected hand with enough landmarks, anchor Earth to palm center
-        if (HANDS_ENABLED && !hands.empty() && hands[0].landmarks.size() > 9) {
+        /*if (HANDS_ENABLED && !hands.empty() && hands[0].landmarks.size() > 9) {
             const auto& p = hands[0].landmarks[9].pt; // palm center landmark in image pixels
+            if (p.x >= 0 && p.y >= 0 && p.x < camW && p.y < camH) {
+                glm::vec2 palmVideoPx(p.x, p.y);
+                glm::ivec2 winSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+                glm::vec2 palmWinPx = palmVideoPx; // assuming webcam fills window; adjust if letterboxed
+                glm::vec3 worldPos = screenToWorldOnPlane(view, projection, winSize.x, winSize.y, palmWinPx, z_pos_init);
+                lastEarthPos = worldPos;
+                hasEarthPos = true;
+            }
+        }*/
+
+        // Testing with center of bbox instead, could remove hand landmarks entirely in this case
+        if (HANDS_ENABLED && !hands.empty() && followHands) {
+            const auto& p = hands[0].roi.tl() + cv::Point2i(hands[0].roi.width / 2, hands[0].roi.height / 2); // use bbox center instead
             if (p.x >= 0 && p.y >= 0 && p.x < camW && p.y < camH) {
                 glm::vec2 palmVideoPx(p.x, p.y);
                 glm::ivec2 winSize(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -385,7 +405,7 @@ int main() {
 
 
         // Slightly scale down to keep fully within the frame
-        model = glm::scale(model, glm::vec3(0.8f));
+        model = glm::scale(model, glm::vec3(1.0f));
         model = glm::rotate(model, glm::radians(y_rot), glm::vec3(0.0f, 1.0f, 0.0f));
 
         // Set globe transform
