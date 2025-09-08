@@ -279,7 +279,7 @@ int main() {
     // Hand tracker setup (detector ONNX + Caffe landmark)
     HandTracker handTracker;
     std::string handErr;
-    std::string detOnnx = "detection_models/hand_detection/yolo11n_hand.onnx";
+    std::string detOnnx = "detection_models/hand_detection/best.onnx"; //yolo11n_hand.onnx";
     std::string protoTxt = "detection_models/hand_landmarks/pose_deploy.prototxt";
     std::string caffeModel = "detection_models/hand_landmarks/pose_iter_102000.caffemodel";
     bool handsReady = handTracker.load(detOnnx, protoTxt, caffeModel, 640, 368, handErr);
@@ -377,7 +377,7 @@ int main() {
 
         bool followHands = false;
         // If we have a detected hand with enough landmarks, anchor Earth to palm center
-        /*if (HANDS_ENABLED && !hands.empty() && hands[0].landmarks.size() > 9) {
+        if (HANDS_ENABLED && !hands.empty() && hands[0].landmarks.size() > 9) {
             const auto& p = hands[0].landmarks[9].pt; // palm center landmark in image pixels
             if (p.x >= 0 && p.y >= 0 && p.x < camW && p.y < camH) {
                 glm::vec2 palmVideoPx(p.x, p.y);
@@ -387,7 +387,7 @@ int main() {
                 lastEarthPos = worldPos;
                 hasEarthPos = true;
             }
-        }*/
+        }
 
         // Testing with center of bbox instead, could remove hand landmarks entirely in this case
         if (HANDS_ENABLED && !hands.empty() && followHands) {

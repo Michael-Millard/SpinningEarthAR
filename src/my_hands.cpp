@@ -40,8 +40,24 @@ bool HandTracker::load(const std::string& detectorOnnxPath,
                        int landmarkInput,
                        std::string& err) {
     try {
+        // Hand detection network
         detNet_ = cv::dnn::readNet(detectorOnnxPath);
+        detNet_.enableFusion(false);
+        if (detNet_.empty()) {
+            std::cerr << "Failed to load detector network from: " << detectorOnnxPath << std::endl;
+            return false;
+        } else {
+            std::cout << "Loaded detector network from: " << detectorOnnxPath << std::endl;
+        }
+        // Hand landmark network
         landNet_ = cv::dnn::readNetFromCaffe(handProtoTxtPath, handCaffeModelPath);
+        landNet_.enableFusion(false);
+        if (landNet_.empty()) {
+            std::cerr << "Failed to load landmark network from: " << handProtoTxtPath << " and " << handCaffeModelPath << std::endl;
+            return false;
+        } else {
+            std::cout << "Loaded landmark network from: " << handProtoTxtPath << " and " << handCaffeModelPath << std::endl;
+        }
         detSize_ = detectorInput > 0 ? detectorInput : 640;
         lmkSize_ = landmarkInput > 0 ? landmarkInput : 368;
         frameCount_ = 0;
@@ -62,46 +78,6 @@ std::vector<cv::Rect> HandTracker::runPalmDetector_(const cv::Mat& frameBGR) {
     std::vector<cv::Rect> rois;
     if (frameBGR.empty() || detNet_.empty()) return rois;
 
-    //int target = detSize_;
-    //int origW = frameBGR.cols;
-    //int origH = frameBGR.rows;
-//
-    //// 1. Compute scale
-    //float r = std::min(target * 1.f / origW, target * 1.f / origH);
-//
-    //// 2. Resize while keeping aspect
-    //int newW = static_cast<int>(std::round(origW * r));
-    //int newH = static_cast<int>(std::round(origH * r));
-    //cv::Mat resized;
-    //cv::resize(frameBGR, resized, cv::Size(newW, newH));
-//
-    //// 3. Compute padding (distribute both sides)
-    //int dw = target - newW;  // remaining width to fill
-    //int dh = target - newH;  // remaining height to fill
-    //int left = dw / 2;
-    //int right = dw - left;
-    //int top = dh / 2;
-    //int bottom = dh - top;
-//
-    //// 4. Add border with 114 gray
-    //cv::Mat padded;
-    //cv::copyMakeBorder(resized, padded, top, bottom, left, right,
-    //                   cv::BORDER_CONSTANT, cv::Scalar(114, 114, 114));
-//
-    //// 5. Blob (BGR->RGB via swapRB=true)
-    //cv::Mat blob = cv::dnn::blobFromImage(
-    //    padded,            // image
-    //    1.0 / 255.0,       // scale
-    //    cv::Size(target, target),
-    //    cv::Scalar(),      // mean (0,0,0)
-    //    true,              // swapRB (BGR->RGB)
-    //    false              // crop
-    //);
-//
-    //// 6. Forward
-    //detNet_.setInput(blob);
-    //cv::Mat outputs = detNet_.forward();
-
     int inW = detSize_, inH = detSize_;
     // Let DNN handle aspect: letterbox to square
     float r = std::min((float)inW / frameBGR.cols, (float)inH / frameBGR.rows);
@@ -111,66 +87,68 @@ std::vector<cv::Rect> HandTracker::runPalmDetector_(const cv::Mat& frameBGR) {
     cv::Mat input(inH, inW, frameBGR.type(), cv::Scalar(114,114,114)); // YOLO common pad value
     resized.copyTo(input(cv::Rect((inW-newW)/2, (inH-newH)/2, newW, newH)));
 
-    cv::Mat blob = cv::dnn::blobFromImage(input, 1.0/255.0, cv::Size(inW, inH), cv::Scalar(), true, false);
-    detNet_.setInput(blob);
-    cv::Mat out = detNet_.forward(); // (1,5,8400)
-    CV_Assert(out.dims == 3 && out.size[0] == 1);
+    try {
+        cv::Mat blob = cv::dnn::blobFromImage(input, 1.0/255.0, cv::Size(inW, inH), cv::Scalar(), true, false);
+        detNet_.setInput(blob);
+        cv::Mat out = detNet_.forward();
+        CV_Assert(out.dims == 3 && out.size[0] == 1);
 
-    int ch = out.size[1];      // 5
-    int anchors = out.size[2]; // 8400
-    CV_Assert(ch == 5);
+        int ch = out.size[1];      // 5
+        int anchors = out.size[2]; // 8400
+        CV_Assert(ch == 5);
 
-    cv::Mat chan(ch, anchors, CV_32F, out.ptr<float>());   // (5,8400)
-    cv::Mat preds; 
-    cv::transpose(chan, preds);                           // (8400,5) rows = candidates
+        cv::Mat chan(ch, anchors, CV_32F, out.ptr<float>());   // (5,8400)
+        cv::Mat preds; 
+        cv::transpose(chan, preds);                           // (8400,5) rows = candidates
 
-    // Letterbox params from your preprocessing
-    //float r = std::min((float)inW / frameBGR.cols, (float)inH / frameBGR.rows);
-    int padX = (inW - std::round(frameBGR.cols * r)) / 2;
-    int padY = (inH - std::round(frameBGR.rows * r)) / 2;
+        // Letterbox params from your preprocessing
+        int padX = (inW - std::round(frameBGR.cols * r)) / 2;
+        int padY = (inH - std::round(frameBGR.rows * r)) / 2;
 
-    std::vector<Det> dets;
-    const float confThresh = 0.30f;
+        std::vector<Det> dets;
+        const float confThresh = 0.30f;
+        for (int i = 0; i < preds.rows; ++i) {
+            const float* row = preds.ptr<float>(i); // x,y,w,h,conf
+            float conf = row[4];
+            if (conf < confThresh) continue;
 
-    for (int i = 0; i < preds.rows; ++i) {
-        const float* row = preds.ptr<float>(i); // x,y,w,h,conf
-        float conf = row[4];
-        if (conf < confThresh) continue;
+            float cx = row[0];
+            float cy = row[1];
+            float w  = row[2];
+            float h  = row[3];
 
-        float cx = row[0];
-        float cy = row[1];
-        float w  = row[2];
-        float h  = row[3];
+            float x1 = cx - 0.5f * w;
+            float y1 = cy - 0.5f * h;
 
-        float x1 = cx - 0.5f * w;
-        float y1 = cy - 0.5f * h;
+            // Remove padding
+            x1 -= padX; 
+            y1 -= padY;
+            // Scale back
+            x1 /= r; 
+            y1 /= r;
+            w  /= r; 
+            h  /= r;
 
-        // Remove padding
-        x1 -= padX; 
-        y1 -= padY;
-        // Scale back
-        x1 /= r; 
-        y1 /= r;
-        w  /= r; 
-        h  /= r;
+            cv::Rect box(
+                (int)std::round(x1),
+                (int)std::round(y1),
+                (int)std::round(w),
+                (int)std::round(h)
+            );
+            box &= cv::Rect(0,0,frameBGR.cols, frameBGR.rows);
+            if (box.area() <= 0) continue;
 
-        cv::Rect box(
-            (int)std::round(x1),
-            (int)std::round(y1),
-            (int)std::round(w),
-            (int)std::round(h)
-        );
-        box &= cv::Rect(0,0,frameBGR.cols, frameBGR.rows);
-        if (box.area() <= 0) continue;
+            dets.push_back({box, conf, 0}); // class 0 = hand
+        }
 
-        dets.push_back({box, conf, 0}); // class 0 = hand
-    }
-
-    // NMS (implement nms to filter by IoU 0.5)
-    std::vector<int> keep;
-    nms(dets, 0.5f, keep);
-    for (int k : keep) {
-        rois.push_back(dets[k].box);
+        // NMS (implement nms to filter by IoU 0.5)
+        std::vector<int> keep;
+        nms(dets, 0.5f, keep);
+        for (int k : keep) {
+            rois.push_back(dets[k].box);
+        }
+    } catch (const cv::Exception& e) {
+        std::cerr << "OpenCV Exception: " << e.what() << std::endl;
     }
     return rois;
 }
@@ -229,18 +207,16 @@ std::vector<HandResult> HandTracker::infer(const cv::Mat& frameBGR, int detectio
     if (frameCount_ % std::max(1, detectionEvery) == 0 || trackedRois_.empty()) {
         trackedRois_ = runPalmDetector_(frameBGR);
     }
-    //if (trackedRois_.empty()) {
-    //    frameCount_++;
-    //    return hands; // no hands
-    //}
-    //HandResult h;
-    //h.roi = trackedRois_[0]; // use the first tracked ROI
-    //hands.push_back(std::move(h));
     for (const auto& r : trackedRois_) {
         HandResult h = runLandmarksOnRoi_(frameBGR, r);
         if (!h.landmarks.empty()) {
             hands.push_back(std::move(h));
         }
+    }
+    if (!trackedRois_.empty()) {
+        HandResult h;
+        h.roi = trackedRois_[0]; // use the first tracked ROI
+        hands.push_back(std::move(h));
     }
     if (smoothingCfg_.enabled && !hands.empty()) {
         applySmoothing_(hands);
