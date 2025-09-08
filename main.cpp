@@ -23,53 +23,6 @@
 void frameBufferSizeCallback(GLFWwindow* window, int width, int height);
 void processUserInput(GLFWwindow* window);
 
-static void drawBoundingBoxOverlay(cv::Mat& frame, const std::vector<HandResult>& hands) {
-    if (frame.empty()) return;
-    const cv::Scalar kBoxColor(0, 255, 255); // yellow (B,G,R)
-    for (const auto& h : hands) {
-        if (h.roi.area() > 0) {
-            cv::rectangle(frame, h.roi, kBoxColor, 2, cv::LINE_AA);
-        }
-    }
-}
-
-// Overlay: draw detected hands on a BGR frame
-static void drawHandsOverlay(cv::Mat& frame, const std::vector<HandResult>& hands) {
-    if (frame.empty()) return;
-    // Edge list for 21-point OpenPose hand model
-    static const int EDGES[][2] = {
-        {0,1},{1,2},{2,3},{3,4},      // thumb
-        {0,5},{5,6},{6,7},{7,8},      // index
-        {0,9},{9,10},{10,11},{11,12}, // middle
-        {0,13},{13,14},{14,15},{15,16}, // ring
-        {0,17},{17,18},{18,19},{19,20}  // little
-    };
-    const int EDGE_COUNT = sizeof(EDGES)/sizeof(EDGES[0]);
-    const cv::Scalar kCircleColor(208, 224, 64); // turquoise (B,G,R)
-    const cv::Scalar kLineColor(20, 255, 57);    // lime green (B,G,R)
-
-    auto validPt = [&](const cv::Point2f& p){ return p.x >= 0 && p.y >= 0 && p.x < frame.cols && p.y < frame.rows; };
-    for (const auto& h : hands) {
-        if (h.landmarks.size() >= 21) {
-            // Draw lines only if both endpoints are valid
-            for (int i = 0; i < EDGE_COUNT; ++i) {
-                const auto& a = h.landmarks[EDGES[i][0]].pt;
-                const auto& b = h.landmarks[EDGES[i][1]].pt;
-                if (validPt(a) && validPt(b)) {
-                    cv::line(frame, a, b, kLineColor, 2, cv::LINE_AA);
-                }
-            }
-            // Draw joints only if valid
-            for (int i = 0; i < 21; ++i) {
-                const auto& p = h.landmarks[i].pt;
-                if (validPt(p)) {
-                    cv::circle(frame, p, 4, kCircleColor, -1, cv::LINE_AA);
-                }
-            }
-        }
-    }
-}
-
 // Screen params
 unsigned int SCREEN_WIDTH = 640;
 unsigned int SCREEN_HEIGHT = 480;
@@ -79,15 +32,15 @@ float delta_time = 0.0f;
 float prev_frame = 0.0f;
 float elapsed_time = 0.0f;
 
-// Hand tracking toggle
-bool HANDS_ENABLED = true;
-
 // Model names
 #define EARTH_MODEL "3d_models/earth.obj"
 #define SPITFIRE_MODEL "3d_models/spitfire.obj"
 
+// Earth params
+float EARTH_SCALE = 0.8f;
+
 // Spitfire orbit params
-const float PLANE_ORBIT_RADIUS = 5.0f;     // distance from Earth's center
+const float PLANE_ORBIT_RADIUS = 4.0f;     // distance from Earth's center
 const float PLANE_ORBIT_SPEED_DEG = 60.0f; // degrees per second
 const float PLANE_SCALE = 0.35f;           // relative size vs Earth
 
@@ -280,12 +233,10 @@ int main() {
     HandTracker handTracker;
     std::string handErr;
     std::string detOnnx = "detection_models/hand_detection/best.onnx"; //yolo11n_hand.onnx";
-    std::string protoTxt = "detection_models/hand_landmarks/pose_deploy.prototxt";
-    std::string caffeModel = "detection_models/hand_landmarks/pose_iter_102000.caffemodel";
-    bool handsReady = handTracker.load(detOnnx, protoTxt, caffeModel, 640, 368, handErr);
+    bool handsReady = handTracker.load(detOnnx, 640, handErr);
     if (!handsReady) {
         std::cerr << "HandTracker load failed: " << handErr << std::endl;
-        HANDS_ENABLED = false;
+        return -1;
     } else {
         // Prefer GPU if available; else fall back to default
         handTracker.setBackendTarget(cv::dnn::DNN_BACKEND_CUDA, cv::dnn::DNN_TARGET_CUDA);
@@ -320,12 +271,7 @@ int main() {
         if ((elapsed_time - lastCamUpdateTime) >= CAM_UPDATE_INTERVAL) {
             if (webcam.ReadFrame(current_frame, err_msg) == 0) {
                 // Run hand tracker on the fresh frame
-                if (HANDS_ENABLED) {
-                    hands = handTracker.infer(current_frame, 5);
-                    // Draw overlay directly on the frame so it appears in the background texture
-                    drawHandsOverlay(current_frame, hands);
-                    drawBoundingBoxOverlay(current_frame, hands);
-                }
+                hands = handTracker.infer(current_frame);
 
                 // Upload to GL texture
                 glBindTexture(GL_TEXTURE_2D, webcamTex);
@@ -364,9 +310,7 @@ int main() {
             glEnable(GL_DEPTH_TEST);
         }
 
-        // View and projection
-        //camera.position = glm::vec3(0.0f, 0.0f, 8.0f);
-        
+        // Setup uniforms in shaders
         glm::mat4 view = camera.getViewMatrix();
         glm::mat4 projection = glm::perspective(glm::radians(camera.zoom),
             static_cast<float>(SCREEN_WIDTH) / static_cast<float>(SCREEN_HEIGHT), 
@@ -375,37 +319,22 @@ int main() {
         // All have same model, view and projection 
         glm::mat4 model = glm::identity<glm::mat4>();
 
-        bool followHands = false;
-        // If we have a detected hand with enough landmarks, anchor Earth to palm center
-        if (HANDS_ENABLED && !hands.empty() && hands[0].landmarks.size() > 9) {
-            const auto& p = hands[0].landmarks[9].pt; // palm center landmark in image pixels
-            if (p.x >= 0 && p.y >= 0 && p.x < camW && p.y < camH) {
-                glm::vec2 palmVideoPx(p.x, p.y);
-                glm::ivec2 winSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-                glm::vec2 palmWinPx = palmVideoPx; // assuming webcam fills window; adjust if letterboxed
-                glm::vec3 worldPos = screenToWorldOnPlane(view, projection, winSize.x, winSize.y, palmWinPx, z_pos_init);
-                lastEarthPos = worldPos;
-                hasEarthPos = true;
-            }
-        }
-
-        // Testing with center of bbox instead, could remove hand landmarks entirely in this case
-        if (HANDS_ENABLED && !hands.empty() && followHands) {
+        // Updated logic to use the center of the detected hand ROI
+        if (!hands.empty()) {
             const auto& p = hands[0].roi.tl() + cv::Point2i(hands[0].roi.width / 2, hands[0].roi.height / 2); // use bbox center instead
             if (p.x >= 0 && p.y >= 0 && p.x < camW && p.y < camH) {
-                glm::vec2 palmVideoPx(p.x, p.y);
+                glm::vec2 palmVideoPx(p.x, p.y - 15); // Small nudge higher
                 glm::ivec2 winSize(SCREEN_WIDTH, SCREEN_HEIGHT);
                 glm::vec2 palmWinPx = palmVideoPx; // assuming webcam fills window; adjust if letterboxed
                 glm::vec3 worldPos = screenToWorldOnPlane(view, projection, winSize.x, winSize.y, palmWinPx, z_pos_init);
                 lastEarthPos = worldPos;
                 hasEarthPos = true;
             }
-        }
+        } 
         glm::vec3 worldPos = hasEarthPos ? lastEarthPos : glm::vec3(0.0f);
 
-
         // Slightly scale down to keep fully within the frame
-        model = glm::scale(model, glm::vec3(1.0f));
+        model = glm::scale(model, glm::vec3(EARTH_SCALE));
         model = glm::rotate(model, glm::radians(y_rot), glm::vec3(0.0f, 1.0f, 0.0f));
 
         // Set globe transform
@@ -418,7 +347,7 @@ int main() {
 
         // Subtle indoor-light uniforms
         // Lighting uniforms for current shader (world space)
-        earth_shader.setVec3("lightPos", glm::vec3(3.0f, 0.0f, 5.0f)); // from left, above, slightly forward
+        earth_shader.setVec3("lightPos", glm::vec3(5.0f, 0.0f, 5.0f)); // from left, above, slightly forward
         earth_shader.setVec3("viewPos", camera.position);
         earth_shader.setFloat("shininess", 32.0f);
 
@@ -491,6 +420,12 @@ void processUserInput(GLFWwindow* window) {
     // Escape to exit
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
+    } else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+        EARTH_SCALE += 0.01f;
+        if (EARTH_SCALE > 1.0f) EARTH_SCALE = 1.0f; // clamp max
+    } else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+        EARTH_SCALE -= 0.01f;
+        if (EARTH_SCALE < 0.25f) EARTH_SCALE = 0.25f; // clamp min
     }
 }
 
