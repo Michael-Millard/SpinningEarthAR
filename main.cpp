@@ -1,11 +1,12 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-#include <my_shader.h>
-#include <my_model.h>
-#include <my_camera.h>
-#include <my_webcam.h>
-#include <my_hands.h>
+#include <my_shader.hpp>
+#include <my_model.hpp>
+#include <my_camera.hpp>
+#include <my_webcam.hpp>
+#include <my_hands.hpp>
+#include <my_cli.hpp>
 
 #include <iostream>
 #include <random>
@@ -16,49 +17,14 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-// For cv::cvtColor
-#include <opencv2/imgproc.hpp>
-
 // Callback function declarations
 void frameBufferSizeCallback(GLFWwindow* window, int width, int height);
 void processUserInput(GLFWwindow* window);
 
-// Screen params
-unsigned int SCREEN_WIDTH = 640;
-unsigned int SCREEN_HEIGHT = 480;
-
-// Timing params
-float delta_time = 0.0f;
-float prev_frame = 0.0f;
-float elapsed_time = 0.0f;
-
-// Model names
-#define EARTH_MODEL "3d_models/earth.obj"
-#define SPITFIRE_MODEL "3d_models/spitfire.obj"
-
-// Earth params
-float EARTH_SCALE = 0.8f;
-
-// Spitfire orbit params
-const float PLANE_ORBIT_RADIUS = 4.0f;     // distance from Earth's center
-const float PLANE_ORBIT_SPEED_DEG = 60.0f; // degrees per second
-const float PLANE_SCALE = 0.35f;           // relative size vs Earth
-
-// Propeller animation params
-const float PROPELLER_RPS = 2.0f;         // revolutions per second
-const glm::vec3 PROPELLER_AXIS = glm::vec3(0.0f, 0.21443f, 3.382f); // local Z axis
-
-// Model matrix params
-float y_rot = 0.0f;
-
-// Camera specs (set later, can't call functions here)
-const float camera_speed = 3.0f;
-const float mouse_sensitivity = 0.1f;
-const float camera_zoom = 50.0f;
-const float x_pos_init = 0.0f;
-const float y_pos_init = 0.0f;
-const float z_pos_init = 15.0f;
-Camera camera(glm::vec3(x_pos_init, y_pos_init, z_pos_init));
+// Global params for callback functions
+int screenWidth;
+int screenHeight;
+float earthScale;
 
 int setupGLFW(GLFWwindow** window) {
     // glfw init and configure
@@ -70,8 +36,8 @@ int setupGLFW(GLFWwindow** window) {
 
     // glfw window creation
     GLFWwindow* glfw_window = glfwCreateWindow(
-        SCREEN_WIDTH,
-        SCREEN_HEIGHT,
+        screenWidth,
+        screenHeight,
         "Globe",
         nullptr,  // windowed (no monitor for fullscreen)
         nullptr
@@ -82,8 +48,6 @@ int setupGLFW(GLFWwindow** window) {
         return -1;
     }
     glfwMakeContextCurrent(glfw_window);
-    // Disable vsync to maximize FPS (you can set to 1 to re-enable)
-    glfwSwapInterval(1);
 
     // Callback functions
     glfwSetFramebufferSizeCallback(glfw_window, frameBufferSizeCallback);
@@ -102,7 +66,7 @@ int setupGLFW(GLFWwindow** window) {
     glEnable(GL_DEPTH_TEST);    // Depth-testing
     glDepthFunc(GL_LESS);       // Smaller value as "closer" for depth-testing
     glEnable(GL_CULL_FACE);     // Cull back faces to reduce fragment work
-    glCullFace(GL_BACK);
+    glCullFace(GL_BACK);    
     glFrontFace(GL_CCW);
 
     // Initialize viewport to current framebuffer size
@@ -110,8 +74,8 @@ int setupGLFW(GLFWwindow** window) {
     glfwGetFramebufferSize(glfw_window, &fbw, &fbh);
     if (fbw > 0 && fbh > 0) {
         glViewport(0, 0, fbw, fbh);
-        SCREEN_WIDTH = static_cast<unsigned int>(fbw);
-        SCREEN_HEIGHT = static_cast<unsigned int>(fbh);
+        screenWidth = static_cast<unsigned int>(fbw);
+        screenHeight = static_cast<unsigned int>(fbh);
     }
     return 0;
 }
@@ -144,37 +108,51 @@ glm::vec3 screenToWorldOnPlane(glm::mat4 view, glm::mat4 proj,
     return pNear + t * dir;
 }
 
-int main() {
+int main(int argc, char** argv) {
+    // Parse CLI arguments
+    CLIOptions options = parseCli(argc, argv);
+    if (options.show_help) {
+        printHelp(argv[0]);
+        return 0;
+    }
+
+    // Set global params
+    screenWidth = options.screenWidth;
+    screenHeight = options.screenHeight;
+    earthScale = options.earthScale;
+
     // Window
     GLFWwindow* window = nullptr;
-    if (setupGLFW(&window)) {
+    if (setupGLFW(&window) < 0) {
         std::cerr << "Failed to setup GLFW. Exiting.\n";
         return -1;
     }
 
     // Shaders
-    Shader earth_shader("shaders/earth_shader.vs", "shaders/earth_shader.fs");
-    Shader bg_shader("shaders/bg_quad.vs", "shaders/bg_quad.fs");
+    Shader earthShader("shaders/earth_shader.vs", "shaders/earth_shader.fs");
+    Shader bgShader("shaders/bg_quad.vs", "shaders/bg_quad.fs");
 
     // Models
-    Model earth_model(EARTH_MODEL, "Earth");
-    Model spitfire_model(SPITFIRE_MODEL, "Spitfire");
+    Model earthModel(options.earthModelPath, "Earth");
+    Model spitfireModel(options.spitfireModelPath, "Spitfire");
 
-    // Camera
-    camera.setMouseSensitivity(mouse_sensitivity);
-    camera.setCameraMovementSpeed(camera_speed);
-    camera.setZoom(camera_zoom);
-    camera.setFPSCamera(false, y_pos_init);
+    // Virtual camera
+    Camera camera;
+    camera.setPosition(options.initPosition);
+    camera.setMouseSensitivity(options.mouseSensitivity);
+    camera.setCameraMovementSpeed(options.cameraSpeed);
+    camera.setZoom(options.cameraZoom);
+    camera.setFixedHeightCamera(false, options.initPosition.y);
     camera.setZoomEnabled(false);
 
     // Webcam (For device name, run: $ v4l2-ctl --list-devices)
-    MyWebcam webcam("Webcam", "/dev/video0", SCREEN_WIDTH, SCREEN_HEIGHT);
-    cv::Mat current_frame;
-    std::string err_msg;
-    int initRead = webcam.ReadFrame(current_frame, err_msg);
+    MyWebcam webcam(options.webcamName, options.deviceName, screenWidth, screenHeight, options.fps);
+    cv::Mat currentFrame(cv::Size(screenWidth, screenHeight), CV_8UC3);
+    std::string errMsg;
+    int initRead = webcam.readFrame(currentFrame, errMsg);
     if (initRead != 0) {
-        std::cerr << "Warning: " << err_msg << " (continuing; will retry each frame)" << std::endl;
-        current_frame.release();
+        std::cerr << "Warning: " << errMsg << " (continuing; will retry each frame)" << std::endl;
+        currentFrame.release();
     }
 
     // --- Setup fullscreen background quad and webcam texture ---
@@ -213,27 +191,22 @@ int main() {
     if (initRead == 0) {
         glBindTexture(GL_TEXTURE_2D, webcamTex);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        camW = current_frame.cols;
-        camH = current_frame.rows;
-        int ch = current_frame.channels();
+        camW = currentFrame.cols;
+        camH = currentFrame.rows;
+        int ch = currentFrame.channels();
         if (ch == 4) { internalFormat = GL_RGBA; dataFormat = GL_BGRA; }
         else if (ch == 3) { internalFormat = GL_RGB; dataFormat = GL_BGR; }
         else if (ch == 1) { internalFormat = GL_RED; dataFormat = GL_RED; }
         else { internalFormat = GL_RGB; dataFormat = GL_BGR; }
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, camW, camH, 0, dataFormat, GL_UNSIGNED_BYTE, current_frame.data);
+        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, camW, camH, 0, dataFormat, GL_UNSIGNED_BYTE, currentFrame.data);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 
-    // Throttle webcam updates to this interval (seconds)
-    const float CAM_UPDATE_INTERVAL = 1.0f / 30.0f; // ~30 FPS
-    float lastCamUpdateTime = 0.0f;
-
-    // Hand tracker setup (detector ONNX + Caffe landmark)
+    // Hand tracker setup 
     HandTracker handTracker;
     std::string handErr;
-    std::string detOnnx = "detection_models/hand_detection/best.onnx"; //yolo11n_hand.onnx";
-    bool handsReady = handTracker.load(detOnnx, 640, handErr);
+    bool handsReady = handTracker.load(options.onnxModelPath, screenWidth, options.applySmoothing, handErr);
     if (!handsReady) {
         std::cerr << "HandTracker load failed: " << handErr << std::endl;
         return -1;
@@ -242,11 +215,13 @@ int main() {
         handTracker.setBackendTarget(cv::dnn::DNN_BACKEND_CUDA, cv::dnn::DNN_TARGET_CUDA);
     }
 
-    // Last known Earth position in world (initialized at origin)
-    glm::vec3 lastEarthPos = glm::vec3(0.0f);
-    bool hasEarthPos = false;
-
     // Render loop
+    float yRot = 0.0f;
+    float deltaTime = 0.0f;
+    float prevFrame = 0.0f;
+    float elapsedTime = 0.0f;
+    glm::vec3 lastEarthPos = glm::vec3(0.0f);
+    cv::Point2i prevPalmPos(screenWidth / 2, screenHeight / 2);
     while (!glfwWindowShouldClose(window))
     {
         // Clear screen colour and buffers
@@ -254,163 +229,197 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Per-frame time logic
-        float current_time = static_cast<float>(glfwGetTime());
-        delta_time = current_time - prev_frame;
-        elapsed_time += delta_time;
-        prev_frame = current_time;
+        float currentTime = static_cast<float>(glfwGetTime());
+        deltaTime = currentTime - prevFrame;
+        elapsedTime += deltaTime;
+        prevFrame = currentTime;
 
         // Rotate the model slowly about the y-axis
-        y_rot += 20.0f * delta_time;
-        y_rot = fmodf(y_rot, 360.0f);
+        yRot += 20.0f * deltaTime;
+        yRot = fmodf(yRot, 360.0f);
 
         // Exit on ESC
         processUserInput(window);
 
         // Update webcam texture (and optionally overlay hands) at most ~30 fps
         std::vector<HandResult> hands;
-        if ((elapsed_time - lastCamUpdateTime) >= CAM_UPDATE_INTERVAL) {
-            if (webcam.ReadFrame(current_frame, err_msg) == 0) {
-                // Run hand tracker on the fresh frame
-                hands = handTracker.infer(current_frame);
+        if (webcam.readFrame(currentFrame, errMsg) == 0) {
+            // Run hand tracker on the fresh frame
+            hands = handTracker.infer(currentFrame);
 
-                // Upload to GL texture
-                glBindTexture(GL_TEXTURE_2D, webcamTex);
-                glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-                if (current_frame.cols != camW || current_frame.rows != camH) {
-                    camW = current_frame.cols;
-                    camH = current_frame.rows;
-                    int ch = current_frame.channels();
-                    if (ch == 4) { internalFormat = GL_RGBA; dataFormat = GL_BGRA; }
-                    else if (ch == 3) { internalFormat = GL_RGB; dataFormat = GL_BGR; }
-                    else if (ch == 1) { internalFormat = GL_RED; dataFormat = GL_RED; }
-                    else { internalFormat = GL_RGB; dataFormat = GL_BGR; }
-                    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, camW, camH, 0, dataFormat, GL_UNSIGNED_BYTE, current_frame.data);
-                } else {
-                    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, camW, camH, dataFormat, GL_UNSIGNED_BYTE, current_frame.data);
-                }
-                glBindTexture(GL_TEXTURE_2D, 0);
+            // Upload to GL texture
+            glBindTexture(GL_TEXTURE_2D, webcamTex);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            if (currentFrame.cols != camW || currentFrame.rows != camH) {
+                camW = currentFrame.cols;
+                camH = currentFrame.rows;
+                int ch = currentFrame.channels();
+                if (ch == 4) { internalFormat = GL_RGBA; dataFormat = GL_BGRA; }
+                else if (ch == 3) { internalFormat = GL_RGB; dataFormat = GL_BGR; }
+                else if (ch == 1) { internalFormat = GL_RED; dataFormat = GL_RED; }
+                else { internalFormat = GL_RGB; dataFormat = GL_BGR; }
+                glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, camW, camH, 0, dataFormat, GL_UNSIGNED_BYTE, currentFrame.data);
+            } else {
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, camW, camH, dataFormat, GL_UNSIGNED_BYTE, currentFrame.data);
             }
-            lastCamUpdateTime = elapsed_time;
+            glBindTexture(GL_TEXTURE_2D, 0);
         }
 
         // Draw background quad only if we have a valid frame size
         if (camW > 0 && camH > 0) {
             glDisable(GL_DEPTH_TEST);
-            bg_shader.use();
-            bg_shader.setInt("uFrame", 0);
+            bgShader.use();
+            bgShader.setInt("uFrame", 0);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, webcamTex);
             glBindVertexArray(bgVAO);
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
             glBindVertexArray(0);
             glBindTexture(GL_TEXTURE_2D, 0);
-
-            // Optional: overlay simple landmark points using gl_Point primitives
-            // For now, skip custom GL overlay; could convert to a small dynamic VBO later.
             glEnable(GL_DEPTH_TEST);
         }
 
         // Setup uniforms in shaders
-        glm::mat4 view = camera.getViewMatrix();
-        glm::mat4 projection = glm::perspective(glm::radians(camera.zoom),
-            static_cast<float>(SCREEN_WIDTH) / static_cast<float>(SCREEN_HEIGHT), 
-            0.1f, 1000.0f);
-
-        // All have same model, view and projection 
         glm::mat4 model = glm::identity<glm::mat4>();
+        glm::mat4 view = camera.getViewMatrix();
+        glm::mat4 projection = glm::perspective(glm::radians(camera.zoom_),
+            static_cast<float>(screenWidth) / static_cast<float>(screenHeight), 
+            0.1f, 1000.0f);
 
         // Updated logic to use the center of the detected hand ROI
         if (!hands.empty()) {
-            const auto& p = hands[0].roi.tl() + cv::Point2i(hands[0].roi.width / 2, hands[0].roi.height / 2); // use bbox center instead
-            if (p.x >= 0 && p.y >= 0 && p.x < camW && p.y < camH) {
-                glm::vec2 palmVideoPx(p.x, p.y - 15); // Small nudge higher
-                glm::ivec2 winSize(SCREEN_WIDTH, SCREEN_HEIGHT);
-                glm::vec2 palmWinPx = palmVideoPx; // assuming webcam fills window; adjust if letterboxed
-                glm::vec3 worldPos = screenToWorldOnPlane(view, projection, winSize.x, winSize.y, palmWinPx, z_pos_init);
-                lastEarthPos = worldPos;
-                hasEarthPos = true;
+            // Only do one hand for now: highest confidence score
+            HandResult bestHand = hands[0];
+            for (const auto& hr : hands) {
+                if (hr.score > bestHand.score) { 
+                    bestHand = hr;
+                }
+            }
+            
+            // Check if plausible match
+            cv::Point2i handPalmPos = bestHand.roi.tl() + cv::Point2i(bestHand.roi.width / 2, bestHand.roi.height / 2);
+            float distToPrevPalm = cv::norm(handPalmPos - prevPalmPos);
+            if (distToPrevPalm < 100.0f) {
+                // Use bounding box center of best hand as palm point
+                if (handPalmPos.x >= 0 && handPalmPos.y >= 0 && handPalmPos.x < camW && handPalmPos.y < camH) {
+                    glm::vec2 palmVideoPx(handPalmPos.x, handPalmPos.y - 15); // Small nudge higher (+Y axis is down in image coords)
+                    glm::ivec2 winSize(screenWidth, screenHeight);
+                    glm::vec2 palmWinPx = palmVideoPx; // assuming webcam fills window; adjust if letterboxed
+                    glm::vec3 worldPos = screenToWorldOnPlane(view, projection, winSize.x, winSize.y, palmWinPx, options.initPosition.z);
+                    lastEarthPos = worldPos;
+                }
+                prevPalmPos = handPalmPos;
             }
         } 
-        glm::vec3 worldPos = hasEarthPos ? lastEarthPos : glm::vec3(0.0f);
+        glm::vec3 worldPos = lastEarthPos;
 
         // Slightly scale down to keep fully within the frame
-        model = glm::scale(model, glm::vec3(EARTH_SCALE));
-        model = glm::rotate(model, glm::radians(y_rot), glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::scale(model, glm::vec3(earthScale));
+        model = glm::rotate(model, glm::radians(yRot), glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::translate(glm::mat4(1.0f), worldPos) * model;
 
-        // Set globe transform
-        model = glm::translate(glm::mat4(1.0f), worldPos) * model; // keep your existing rotation/scale
+        // Set shader uniforms
+        earthShader.use();
+        earthShader.setMat4("model", model);
+        earthShader.setMat4("view", view);
+        earthShader.setMat4("projection", projection);
 
-        earth_shader.use();
-        earth_shader.setMat4("model", model);
-        earth_shader.setMat4("view", view);
-        earth_shader.setMat4("projection", projection);
-
-        // Subtle indoor-light uniforms
         // Lighting uniforms for current shader (world space)
-        earth_shader.setVec3("lightPos", glm::vec3(5.0f, 0.0f, 5.0f)); // from left, above, slightly forward
-        earth_shader.setVec3("viewPos", camera.position);
-        earth_shader.setFloat("shininess", 32.0f);
+        earthShader.setVec3("lightPos", glm::vec3(5.0f, 0.0f, 5.0f)); 
+        earthShader.setVec3("viewPos", camera.position_);
+        earthShader.setFloat("shininess", 32.0f);
+        earthModel.draw(earthShader);
 
-        // Draw the Earth
-        earth_model.draw(earth_shader);
-
-        // --- Draw the Spitfire orbiting the Earth's equator (relative to Earth) ---
         // Earth transform without scale: translation to worldPos and Earth rotation
         glm::mat4 earthTR = glm::translate(glm::mat4(1.0f), worldPos) *
-                            glm::rotate(glm::mat4(1.0f), glm::radians(y_rot), glm::vec3(0.0f, 1.0f, 0.0f));
+                            glm::rotate(glm::mat4(1.0f), glm::radians(yRot), glm::vec3(0.0f, 1.0f, 0.0f));
 
         // Orbit in Earth's local XZ plane (equator)
-        float theta = glm::radians(elapsed_time * PLANE_ORBIT_SPEED_DEG);
+        float theta = glm::radians(elapsedTime * options.spitfireOrbitSpeedDeg);
         glm::vec3 orbitPos = glm::vec3(
-            PLANE_ORBIT_RADIUS * cosf(theta),
+            options.spitfireOrbitRadius * cosf(theta),
             0.0f,
-            PLANE_ORBIT_RADIUS * sinf(theta)
+            options.spitfireOrbitRadius * sinf(theta)
         );
 
         // Tangent direction along the orbit (forward direction) in Earth-local frame
-        glm::vec3 forward = glm::normalize(glm::vec3(
-            -sinf(theta), 0.0f, cosf(theta)
-        ));
+        glm::vec3 forward = glm::normalize(glm::vec3(-sinf(theta), 0.0f, cosf(theta)));
         glm::vec3 up(0.0f, 1.0f, 0.0f); // Earth's up
         glm::vec3 right = glm::normalize(glm::cross(forward, up));
+
         // Recompute up to ensure orthonormal basis
         up = glm::normalize(glm::cross(right, forward));
 
-        glm::mat4 basis(1.0f);
         // Columns are the basis vectors (Earth-local): right, up, forward
+        glm::mat4 basis(1.0f);
         basis[0] = glm::vec4(right, 0.0f);
         basis[1] = glm::vec4(up, 0.0f);
         basis[2] = glm::vec4(forward, 0.0f);
 
-        // Compose plane relative to Earth: Earth TR -> orbit translate -> orientation -> local roll -> scale
+        // Compose spitfire relative to Earth: Earth TR -> orbit translate -> orientation -> local roll -> scale
         glm::mat4 planeModel = earthTR
             * glm::translate(glm::mat4(1.0f), orbitPos)
             * basis
             * glm::rotate(glm::mat4(1.0f), glm::radians(-45.0f), glm::vec3(0.0f, 0.0f, 1.0f))
-            * glm::scale(glm::mat4(1.0f), glm::vec3(PLANE_SCALE));
+            * glm::scale(glm::mat4(1.0f), glm::vec3(options.spitfireScale));
+        earthShader.setMat4("model", planeModel);
 
-        earth_shader.setMat4("model", planeModel);
-        // draw with same shader uniforms (view/projection/light already bound)
         // Apply per-mesh transform to spin propeller meshes
-        float propAngle = (2.0f * M_PI) * PROPELLER_RPS * elapsed_time; // radians
-        spitfire_model.drawWithTransforms(earth_shader, [&](const std::string& meshName) -> glm::mat4 {
+        float propAngle = (2.0f * M_PI) * options.propellerRps * elapsedTime; // radians
+        spitfireModel.drawWithTransforms(earthShader, [&](const std::string& meshName) -> glm::mat4 {
             std::string lower = meshName;
             for (char& c : lower) c = static_cast<char>(::tolower(c));
             if (lower.find("prop") != std::string::npos) {
-                return glm::rotate(glm::mat4(1.0f), propAngle, PROPELLER_AXIS);
+                return glm::rotate(glm::mat4(1.0f), propAngle, options.propellerAxis);
             }
             return glm::mat4(1.0f);
         }); 
+
+        // Render four Spitfires spaced 90 degrees apart
+        for (int i = 0; i < 4; ++i) {
+            float angleOffset = glm::radians(90.0f * i);
+            float adjustedTheta = theta + angleOffset;
+
+            glm::vec3 adjustedOrbitPos = glm::vec3(
+                options.spitfireOrbitRadius * cosf(adjustedTheta),
+                0.0f,
+                options.spitfireOrbitRadius * sinf(adjustedTheta)
+            );
+
+            glm::vec3 adjustedForward = glm::normalize(glm::vec3(-sinf(adjustedTheta), 0.0f, cosf(adjustedTheta)));
+            glm::vec3 adjustedRight = glm::normalize(glm::cross(adjustedForward, up));
+            glm::vec3 adjustedUp = glm::normalize(glm::cross(adjustedRight, adjustedForward));
+
+            glm::mat4 adjustedBasis(1.0f);
+            adjustedBasis[0] = glm::vec4(adjustedRight, 0.0f);
+            adjustedBasis[1] = glm::vec4(adjustedUp, 0.0f);
+            adjustedBasis[2] = glm::vec4(adjustedForward, 0.0f);
+
+            glm::mat4 adjustedPlaneModel = earthTR
+                * glm::translate(glm::mat4(1.0f), adjustedOrbitPos)
+                * adjustedBasis
+                * glm::rotate(glm::mat4(1.0f), glm::radians(-45.0f), glm::vec3(0.0f, 0.0f, 1.0f))
+                * glm::scale(glm::mat4(1.0f), glm::vec3(options.spitfireScale));
+
+            earthShader.setMat4("model", adjustedPlaneModel);
+
+            spitfireModel.drawWithTransforms(earthShader, [&](const std::string& meshName) -> glm::mat4 {
+                std::string lower = meshName;
+                for (char& c : lower) c = static_cast<char>(::tolower(c));
+                if (lower.find("prop") != std::string::npos) {
+                    return glm::rotate(glm::mat4(1.0f), propAngle, options.propellerAxis);
+                }
+                return glm::mat4(1.0f);
+            });
+        }
 
         // Swap buffers and poll events
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // Destroy window
+    // Clean up and exit
     glfwDestroyWindow(window);
-
-    // Terminate and return success
     glfwTerminate();
     return 0;
 }
@@ -421,11 +430,11 @@ void processUserInput(GLFWwindow* window) {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
     } else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        EARTH_SCALE += 0.01f;
-        if (EARTH_SCALE > 1.0f) EARTH_SCALE = 1.0f; // clamp max
+        earthScale += 0.01f;
+        if (earthScale > 1.5f) earthScale = 1.5f; // clamp max
     } else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-        EARTH_SCALE -= 0.01f;
-        if (EARTH_SCALE < 0.25f) EARTH_SCALE = 0.25f; // clamp min
+        earthScale -= 0.01f;
+        if (earthScale < 0.5f) earthScale = 0.5f; // clamp min
     }
 }
 
@@ -439,6 +448,6 @@ void frameBufferSizeCallback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
 
     // Adjust screen width and height params that set the aspect ratio in the projection matrix
-    SCREEN_WIDTH = width;
-    SCREEN_HEIGHT = height;
+    screenWidth = width;
+    screenHeight = height;
 }

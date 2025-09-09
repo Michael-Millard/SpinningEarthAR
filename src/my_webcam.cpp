@@ -1,40 +1,42 @@
-#include <my_webcam.h>
+#include <my_webcam.hpp>
 
-MyWebcam::MyWebcam(const std::string cam_name, const std::string device_name, int frame_width, int frame_height)
-    : cam_name_(cam_name), device_name_(device_name), frame_width_(frame_width), frame_height_(frame_height) {
+MyWebcam::MyWebcam(const std::string camName, const std::string deviceName, int frameWidth, int frameHeight, int FPS)
+    : camName_(camName), deviceName_(deviceName), frameWidth_(frameWidth), frameHeight_(frameHeight), FPS_(FPS) {
     // Open camera with V4L2 backend
-    cap.open(device_name_, cv::CAP_V4L2);
-    if (!cap.isOpened()) {
-        throw std::runtime_error("Error: Could not open video device " + device_name_);
+    cap_.open(deviceName_, cv::CAP_V4L2);
+    if (!cap_.isOpened()) {
+        throw std::runtime_error("Error: Could not open video device " + deviceName_);
     } else {
-        std::cout << "Successfully opened video device " << device_name_ 
-            << " for camera " << cam_name_ << std::endl;
+        std::cout << "Successfully opened video device " << deviceName_
+            << " for camera " << camName_ << std::endl;
     }
-    cap.set(cv::CAP_PROP_FRAME_WIDTH, frame_width_);
-    cap.set(cv::CAP_PROP_FRAME_HEIGHT, frame_height_);
+    cap_.set(cv::CAP_PROP_FRAME_WIDTH, frameWidth_);
+    cap_.set(cv::CAP_PROP_FRAME_HEIGHT, frameHeight_);
+    cap_.set(cv::CAP_PROP_FPS, FPS_); 
+    cap_.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M','J','P','G'));
 }
 
 MyWebcam::~MyWebcam() {
-    if (cap.isOpened()) {
-        cap.release();
+    if (cap_.isOpened()) {
+        cap_.release();
     }
 }
 
-int MyWebcam::ReadFrame(cv::Mat& frame, std::string& err_msg) {
-    if (!cap.isOpened()) {
-        err_msg = "Error: Video device " + device_name_ + " is not opened.";
+int MyWebcam::readFrame(cv::Mat& frame, std::string& errMsg) {
+    // Check if camera is opened
+    if (!cap_.isOpened()) {
+        errMsg = "Error: Video device " + deviceName_ + " is not opened.";
         return -1;
     }
-
-    if (!cap.read(frame)) {
-        err_msg = "Error: Could not read frame from " + cam_name_;
+    // Capture frame
+    if (!cap_.read(frame)) {
+        errMsg = "Error: Could not read frame from " + camName_;
         return -1;
     }
-
+    // Check valid frame
     if (frame.empty()) {
-        err_msg = "Error: Frame is empty from " + cam_name_;
+        errMsg = "Error: Frame is empty from " + camName_;
         return -1;
     } 
-
     return 0;
 }

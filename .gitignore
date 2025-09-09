@@ -6,3 +6,4 @@ build/
 
 # Models
 detection_models/
+onnx_models/

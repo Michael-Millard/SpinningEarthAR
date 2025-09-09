@@ -32,6 +32,9 @@ find_package(OpenGL REQUIRED)
 # OpenCV
 find_package(OpenCV 4.0 REQUIRED COMPONENTS core imgproc imgcodecs highgui videoio dnn)
 
+# YAML-CPP
+find_package(yaml-cpp REQUIRED)
+
 # --- Executable ---
 add_executable(MillSpinningGlobe)
 
@@ -42,6 +45,7 @@ target_sources(MillSpinningGlobe PRIVATE
     src/stb.cpp  
     src/my_webcam.cpp
     src/my_hands.cpp
+    src/my_cli.cpp
 )
 
 # Project includes (your local include/ with glad/)
@@ -59,6 +63,7 @@ target_link_libraries(MillSpinningGlobe PRIVATE
     assimp
     OpenGL::GL
     ${OpenCV_LIBS}
+    yaml-cpp
     dl   # required for glad on Linux
 )
 

@@ -1,0 +1,33 @@
+# Configuration file for HandDetectorCpp
+
+# Screen params
+screen_width: 640
+screen_height: 480
+
+# Camera params (get device from '$ v4l2-ctl --list-devices')
+fps: 30
+camera_name: "Webcam"
+device_name: "/dev/video0"
+
+# ONNX yolo model params
+onnx_input_size: 640
+model_path: "onnx_models/yolo11s_hand.onnx"
+smooth: true
+
+# Virtual camera params
+camera_speed: 3.0
+mouse_sensitivity: 0.1
+camera_zoom: 60.0
+init_position: [0.0, 0.0, 12.0]
+
+# Earth model params
+earth_model_path: "3d_models/earth.obj"
+earth_scale: 1.0
+
+# Spitfire model params
+spitfire_model_path: "3d_models/spitfire.obj"
+spitfire_orbit_radius: 4.0
+spitfire_orbit_speed_deg: 60.0
+spitfire_scale: 0.3
+propeller_rps: 3.0
+propeller_axis: [0.0, 0.21443, 3.382]
