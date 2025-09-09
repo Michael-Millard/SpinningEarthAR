@@ -38,6 +38,26 @@ Some screenshots of the AR app running are provided below. 4x Spitfire models or
   - Non-maximum suppression (NMS) for filtering hand detection results.
   - Multi-threaded build support with CMake.
 
+## Requirements
+
+To build and run SpinningEarthAR, ensure you have the following dependencies installed:
+
+- **C++ Compiler**: A compiler that supports C++17 or later (e.g., GCC 7.3+, Clang 6.0+, MSVC 2017+).
+- **CMake**: Version 3.14 or higher.
+- **OpenCV**: Version 4.X, built with the DNN module enabled.
+- **OpenGL**: A graphics card and driver that support OpenGL 3.3 or higher.
+- **GLFW**: For window and input management.
+- **GLAD**: For loading OpenGL function pointers.
+- **YAML-CPP**: For parsing configuration files in YAML format.
+- **ONNX Hand Detection Model**: Pre-trained YOLOv11n or YOLOv11s model in ONNX format.
+- **glm**: OpenGL Mathematics library for matrix and vector operations.
+
+### Optional Tools
+- **CUDA**: For GPU acceleration of hand detection (if supported by your hardware).
+- **v4l-utils**: For listing and managing video devices on Linux.
+
+Ensure all dependencies are properly installed and configured before building the project. Refer to the build instructions below for more details.
+
 ## Usage
 
 ### Command-Line Options
@@ -101,4 +121,4 @@ The defaults in config.yaml are pretty good. You shouldn't need to modify parame
 1. Thanks to Ringo3D for the Earth 3D model: https://www.turbosquid.com/3d-models/earth-max-free/1016431
 2. Thanks to sscott2031 for the Spitfire 3D model: https://sketchfab.com/3d-models/spitfire-mk-ixe-08b356e7297b4e83bd1524c10bb05cad
 3. Thanks to Nouman Ahsan for the Hand Detection dataset on which my YOLO models were trained: https://www.kaggle.com/datasets/nomihsa965/hand-detection-dataset-vocyolo-format?resource=download
-4. Thanks to Ultralytics for the YOLOv11 nano and small models. 
+4. Thanks to Ultralytics for the YOLOv11 nano and small models.
