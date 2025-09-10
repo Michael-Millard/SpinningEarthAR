@@ -165,6 +165,42 @@ CLIOptions parseCli(int argc, char** argv) {
             } else {
                 std::cerr << "Missing value for --earth_scale\n";
             }
+        } else if (isFlag(a, "--moon_model_path", "--moon_model")) {
+            if (i + 1 < args.size()) {
+                opts.moonModelPath = args[++i];
+            } else {
+                std::cerr << "Missing value for --moon_model_path\n";
+            }
+        } else if (isFlag(a, "--moon_orbit_radius", "--moon_radius")) {
+            if (i + 1 < args.size()) {
+                try {
+                    opts.moonOrbitRadius = std::stof(args[++i]);
+                } catch (...) {
+                    std::cerr << "Invalid float for --moon_orbit_radius\n";
+                }
+            } else {
+                std::cerr << "Missing value for --moon_orbit_radius\n";
+            }
+        } else if (isFlag(a, "--moon_orbit_speed_deg", "--moon_speed")) {
+            if (i + 1 < args.size()) {
+                try {
+                    opts.moonOrbitSpeedDeg = std::stof(args[++i]);
+                } catch (...) {
+                    std::cerr << "Invalid float for --moon_orbit_speed_deg\n";
+                }
+            } else {
+                std::cerr << "Missing value for --moon_orbit_speed_deg\n";
+            }
+        } else if (isFlag(a, "--moon_scale", "--moon_scale")) {
+            if (i + 1 < args.size()) {
+                try {
+                    opts.moonScale = std::stof(args[++i]);
+                } catch (...) {
+                    std::cerr << "Invalid float for --moon_scale\n";
+                }
+            } else {
+                std::cerr << "Missing value for --moon_scale\n";
+            }
         } else if (isFlag(a, "--spitfire_model_path", "--spitfire_model")) {
             if (i + 1 < args.size()) {
                 opts.spitfireModelPath = args[++i];

@@ -30,6 +30,12 @@ struct CLIOptions {
     std::string earthModelPath{"3d_models/earth.obj"};
     float earthScale{0.8f};
 
+    // Moon model params
+    std::string moonModelPath{"3d_models/moon.obj"};
+    float moonOrbitRadius{10.0f};
+    float moonOrbitSpeedDeg{30.0f};
+    float moonScale{0.5f};
+
     // Spitfire model params
     std::string spitfireModelPath{"3d_models/spitfire.obj"};
     float spitfireOrbitRadius{4.0f};
@@ -75,6 +81,11 @@ struct CLIOptions {
         if (config["earth_model_path"]) earthModelPath = config["earth_model_path"].as<std::string>();
         if (config["earth_scale"]) earthScale = config["earth_scale"].as<float>();
 
+        // Moon model params
+        if (config["moon_model_path"]) moonModelPath = config["moon_model_path"].as<std::string>();
+        if (config["moon_orbit_radius"]) moonOrbitRadius = config["moon_orbit_radius"].as<float>();
+        if (config["moon_scale"]) moonScale = config["moon_scale"].as<float>();
+
         // Spitfire model params
         if (config["spitfire_model_path"]) spitfireModelPath = config["spitfire_model_path"].as<std::string>();
         if (config["spitfire_orbit_radius"]) spitfireOrbitRadius = config["spitfire_orbit_radius"].as<float>();
@@ -106,6 +117,9 @@ struct CLIOptions {
 //   --init_position <float,float,float>
 //   --earth_model_path <string>
 //   --earth_scale <float>
+//   --moon_model_path <string>
+//   --moon_orbit_radius <float>
+//   --moon_scale <float>
 //   --spitfire_model_path <string>
 //   --spitfire_orbit_radius <float>
 //   --spitfire_orbit_speed_deg <float>

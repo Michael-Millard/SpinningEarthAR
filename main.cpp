@@ -7,6 +7,7 @@
 #include <my_webcam.hpp>
 #include <my_hands.hpp>
 #include <my_cli.hpp>
+#include <my_bg_quad.hpp>
 
 #include <iostream>
 #include <random>
@@ -134,6 +135,7 @@ int main(int argc, char** argv) {
 
     // Models
     Model earthModel(options.earthModelPath, "Earth");
+    Model moonModel(options.moonModelPath, "Moon");
     Model spitfireModel(options.spitfireModelPath, "Spitfire");
 
     // Virtual camera
@@ -155,54 +157,6 @@ int main(int argc, char** argv) {
         currentFrame.release();
     }
 
-    // --- Setup fullscreen background quad and webcam texture ---
-    GLuint bgVAO = 0, bgVBO = 0, webcamTex = 0;
-    // Fullscreen quad (NDC) using triangle strip; flip V in texcoords to match OpenCV's top-left origin
-    float bgQuad[] = {
-        // x, y,   u, v
-        -1.0f, -1.0f, 0.0f, 1.0f,
-         1.0f, -1.0f, 1.0f, 1.0f,
-        -1.0f,  1.0f, 0.0f, 0.0f,
-         1.0f,  1.0f, 1.0f, 0.0f,
-    };
-    glGenVertexArrays(1, &bgVAO);
-    glGenBuffers(1, &bgVBO);
-    glBindVertexArray(bgVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, bgVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(bgQuad), bgQuad, GL_STATIC_DRAW);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-    glBindVertexArray(0);
-
-    // Create the webcam texture; allocate lazily when first valid frame arrives
-    glGenTextures(1, &webcamTex);
-    glBindTexture(GL_TEXTURE_2D, webcamTex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
-    int camW = 0;
-    int camH = 0;
-    GLenum internalFormat = GL_RGB;
-    GLenum dataFormat = GL_RGB;
-    if (initRead == 0) {
-        glBindTexture(GL_TEXTURE_2D, webcamTex);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        camW = currentFrame.cols;
-        camH = currentFrame.rows;
-        int ch = currentFrame.channels();
-        if (ch == 4) { internalFormat = GL_RGBA; dataFormat = GL_BGRA; }
-        else if (ch == 3) { internalFormat = GL_RGB; dataFormat = GL_BGR; }
-        else if (ch == 1) { internalFormat = GL_RED; dataFormat = GL_RED; }
-        else { internalFormat = GL_RGB; dataFormat = GL_BGR; }
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, camW, camH, 0, dataFormat, GL_UNSIGNED_BYTE, currentFrame.data);
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
-
     // Hand tracker setup 
     HandTracker handTracker;
     std::string handErr;
@@ -214,6 +168,10 @@ int main(int argc, char** argv) {
         // Prefer GPU if available; else fall back to default
         handTracker.setBackendTarget(cv::dnn::DNN_BACKEND_CUDA, cv::dnn::DNN_TARGET_CUDA);
     }
+
+    // Background Quad
+    BackgroundQuad bgQuad("shaders/bg_quad.vs", "shaders/bg_quad.fs");
+    bgQuad.initialize();
 
     // Render loop
     float yRot = 0.0f;
@@ -246,38 +204,13 @@ int main(int argc, char** argv) {
         if (webcam.readFrame(currentFrame, errMsg) == 0) {
             // Run hand tracker on the fresh frame
             hands = handTracker.infer(currentFrame);
-
-            // Upload to GL texture
-            glBindTexture(GL_TEXTURE_2D, webcamTex);
-            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            if (currentFrame.cols != camW || currentFrame.rows != camH) {
-                camW = currentFrame.cols;
-                camH = currentFrame.rows;
-                int ch = currentFrame.channels();
-                if (ch == 4) { internalFormat = GL_RGBA; dataFormat = GL_BGRA; }
-                else if (ch == 3) { internalFormat = GL_RGB; dataFormat = GL_BGR; }
-                else if (ch == 1) { internalFormat = GL_RED; dataFormat = GL_RED; }
-                else { internalFormat = GL_RGB; dataFormat = GL_BGR; }
-                glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, camW, camH, 0, dataFormat, GL_UNSIGNED_BYTE, currentFrame.data);
-            } else {
-                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, camW, camH, dataFormat, GL_UNSIGNED_BYTE, currentFrame.data);
-            }
-            glBindTexture(GL_TEXTURE_2D, 0);
         }
 
-        // Draw background quad only if we have a valid frame size
-        if (camW > 0 && camH > 0) {
-            glDisable(GL_DEPTH_TEST);
-            bgShader.use();
-            bgShader.setInt("uFrame", 0);
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, webcamTex);
-            glBindVertexArray(bgVAO);
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-            glBindVertexArray(0);
-            glBindTexture(GL_TEXTURE_2D, 0);
-            glEnable(GL_DEPTH_TEST);
-        }
+        // Update webcam texture
+        bgQuad.updateTexture(currentFrame);
+
+        // Render background quad
+        bgQuad.render();
 
         // Setup uniforms in shaders
         glm::mat4 model = glm::identity<glm::mat4>();
@@ -296,12 +229,12 @@ int main(int argc, char** argv) {
                 }
             }
             
-            // Check if plausible match
+            // Check if plausible match (nearby to previous palm, starting in centre of frame)
             cv::Point2i handPalmPos = bestHand.roi.tl() + cv::Point2i(bestHand.roi.width / 2, bestHand.roi.height / 2);
             float distToPrevPalm = cv::norm(handPalmPos - prevPalmPos);
             if (distToPrevPalm < 100.0f) {
                 // Use bounding box center of best hand as palm point
-                if (handPalmPos.x >= 0 && handPalmPos.y >= 0 && handPalmPos.x < camW && handPalmPos.y < camH) {
+                if (handPalmPos.x >= 0 && handPalmPos.y >= 0 && handPalmPos.x < currentFrame.cols && handPalmPos.y < currentFrame.rows) {
                     glm::vec2 palmVideoPx(handPalmPos.x, handPalmPos.y - 15); // Small nudge higher (+Y axis is down in image coords)
                     glm::ivec2 winSize(screenWidth, screenHeight);
                     glm::vec2 palmWinPx = palmVideoPx; // assuming webcam fills window; adjust if letterboxed
@@ -413,6 +346,33 @@ int main(int argc, char** argv) {
             });
         }
 
+        // Moon orbit parameters
+        float moonTheta = glm::radians(elapsedTime * options.moonOrbitSpeedDeg);
+        glm::vec3 moonOrbitPos = glm::vec3(
+            options.moonOrbitRadius * cosf(moonTheta),
+            0.0f,
+            options.moonOrbitRadius * sinf(moonTheta)
+        );
+
+        // Compute moon orientation to always face Earth
+        glm::vec3 moonForward = glm::normalize(-moonOrbitPos); // Point towards Earth
+        glm::vec3 moonRight = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), moonForward));
+        glm::vec3 moonUp = glm::normalize(glm::cross(moonForward, moonRight));
+
+        glm::mat4 moonBasis(1.0f);
+        moonBasis[0] = glm::vec4(moonRight, 0.0f);
+        moonBasis[1] = glm::vec4(moonUp, 0.0f);
+        moonBasis[2] = glm::vec4(moonForward, 0.0f);
+
+        glm::mat4 moonModelMatrix = earthTR
+            * glm::translate(glm::mat4(1.0f), moonOrbitPos)
+            * moonBasis
+            * glm::scale(glm::mat4(1.0f), glm::vec3(options.moonScale));
+
+        // Ensure the moon model uses its own texture
+        earthShader.setMat4("model", moonModelMatrix);
+        moonModel.draw(earthShader);
+
         // Swap buffers and poll events
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -429,13 +389,7 @@ void processUserInput(GLFWwindow* window) {
     // Escape to exit
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
-    } else if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-        earthScale += 0.01f;
-        if (earthScale > 1.5f) earthScale = 1.5f; // clamp max
-    } else if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-        earthScale -= 0.01f;
-        if (earthScale < 0.5f) earthScale = 0.5f; // clamp min
-    }
+    } 
 }
 
 // Window size change callback

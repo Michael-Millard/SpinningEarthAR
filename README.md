@@ -1,6 +1,6 @@
 # SpinningEarthAR
 
-This is an augmented reality (AR) application that combines real-time hand tracking with 3D rendering. The project uses OpenCV for hand detection, OpenGL for rendering, and GLFW for window management. It features a spinning Earth model and an orbiting Spitfire plane, with interactive controls and AR integration. The hand detection model was trained in Python using YOLOv11n/s. See here: https://github.com/Michael-Millard/MillHandDetector. I exported the trained YOLO models in ONNX format and read them here in using OpenCV::dnn.
+This is an augmented reality (AR) application that combines real-time hand tracking with 3D rendering. The project uses OpenCV for hand detection, OpenGL for rendering, and GLFW for window management. It features a spinning Earth model, four orbiting Spitfire planes, and a moon, with interactive controls and AR integration. The hand detection model was trained in Python using YOLOv11n/s. See here: https://github.com/Michael-Millard/MillHandDetector. I exported the trained YOLO models in ONNX format and read them here in using OpenCV::dnn.
 
 Some screenshots of the AR app running are provided below. 4x Spitfire models orbit a 3D model of the Earth. All of the 3D models follow the detected hand as it moves.
 <table>
@@ -15,7 +15,8 @@ Some screenshots of the AR app running are provided below. 4x Spitfire models or
 
 - **3D Rendering**:
   - Realistic Earth model with spinning animation.
-  - Spitfire plane orbiting the Earth with an independently spinning propeller.
+  - Four Spitfire planes orbiting the Earth, spaced 120 degrees apart, with independently spinning propellers.
+  - A moon orbiting the Earth with realistic orientation, ensuring the same side always faces the Earth.
   - Customizable textures and shaders for enhanced visuals.
 
 - **Hand Tracking**:
@@ -120,5 +121,6 @@ The defaults in config.yaml are pretty good. You shouldn't need to modify parame
 # Acknowledgements
 1. Thanks to Ringo3D for the Earth 3D model: https://www.turbosquid.com/3d-models/earth-max-free/1016431
 2. Thanks to sscott2031 for the Spitfire 3D model: https://sketchfab.com/3d-models/spitfire-mk-ixe-08b356e7297b4e83bd1524c10bb05cad
-3. Thanks to Nouman Ahsan for the Hand Detection dataset on which my YOLO models were trained: https://www.kaggle.com/datasets/nomihsa965/hand-detection-dataset-vocyolo-format?resource=download
-4. Thanks to Ultralytics for the YOLOv11 nano and small models.
+3. Thanks to Chenchanchong for the Moon 3D model: https://skfb.ly/pzJGt (licensed under Creative Commons Attribution: http://creativecommons.org/licenses/by/4.0/).
+4. Thanks to Nouman Ahsan for the Hand Detection dataset on which my YOLO models were trained: https://www.kaggle.com/datasets/nomihsa965/hand-detection-dataset-vocyolo-format?resource=download
+5. Thanks to Ultralytics for the YOLOv11 nano and small models.

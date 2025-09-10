@@ -46,6 +46,7 @@ target_sources(MillSpinningGlobe PRIVATE
     src/my_webcam.cpp
     src/my_hands.cpp
     src/my_cli.cpp
+    src/my_bg_quad.cpp
 )
 
 # Project includes (your local include/ with glad/)
