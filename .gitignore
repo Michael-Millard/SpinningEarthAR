@@ -7,3 +7,6 @@ build/
 # Models
 detection_models/
 onnx_models/
+
+# Demo video
+media/demo.avi

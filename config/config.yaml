@@ -33,7 +33,7 @@ moon_scale: 1.0
 # Spitfire model params
 spitfire_model_path: "3d_models/spitfire.obj"
 spitfire_orbit_radius: 4.5
-spitfire_orbit_speed_deg: 90.0
+spitfire_orbit_speed_deg: 60.0
 spitfire_scale: 0.3
-propeller_rps: 3.0
+propeller_rps: 2.0
 propeller_axis: [0.0, 0.21443, 3.382]
