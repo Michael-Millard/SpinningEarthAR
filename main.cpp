@@ -173,18 +173,6 @@ int main(int argc, char** argv) {
     BackgroundQuad bgQuad("shaders/bg_quad.vs", "shaders/bg_quad.fs");
     bgQuad.initialize();
 
-    // Setup video writer
-    std::string videoPath = "media/demo.avi";
-    cv::VideoWriter videoWriter;
-    int fourcc = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
-    int fps = 30; // Adjust as needed
-    videoWriter.open(videoPath, fourcc, fps, cv::Size(screenWidth, screenHeight));
-
-    if (!videoWriter.isOpened()) {
-        std::cerr << "Failed to open video writer at " << videoPath << std::endl;
-        return -1;
-    }
-
     // Render loop
     float yRot = 0.0f;
     float deltaTime = 0.0f;
@@ -387,19 +375,10 @@ int main(int argc, char** argv) {
         earthShader.setMat4("model", moonModelMatrix);
         moonModel.draw(earthShader);
 
-        // Capture the OpenGL rendering for the video
-        cv::Mat frame(screenHeight, screenWidth, CV_8UC3);
-        glReadPixels(0, 0, screenWidth, screenHeight, GL_BGR, GL_UNSIGNED_BYTE, frame.data);
-        cv::flip(frame, frame, 0); // Flip vertically to correct OpenGL's origin
-        videoWriter.write(frame);
-
         // Swap buffers and poll events
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
-    // Release video writer
-    videoWriter.release();
 
     // Clean up and exit
     glfwDestroyWindow(window);
