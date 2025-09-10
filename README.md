@@ -114,12 +114,13 @@ The defaults in config.yaml are pretty good. You shouldn't need to modify parame
    ```
 
 Else if you want to use the Makefile, do steps 1 and 2 above, then:
-3. For Release build (running just 'make' is the same):    
+
+3. Build with:    
   ```bash
+   # For release build (just 'make' is the same)
    make release
-   ```
-  Or for Debug build:    
-  ```bash
+   
+   # For debug build
    make debug
    ```
 
