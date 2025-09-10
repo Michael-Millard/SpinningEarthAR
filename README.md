@@ -1,6 +1,6 @@
 # SpinningEarthAR
 
-This is an augmented reality (AR) application that combines real-time hand tracking with 3D rendering. The project uses OpenCV for hand detection, OpenGL for rendering, and GLFW for window management. It features a spinning Earth model, four orbiting Spitfire planes, and a moon, with interactive controls and AR integration. The hand detection model was trained in Python using YOLOv11n/s. See here: https://github.com/Michael-Millard/MillHandDetector. I exported the trained YOLO models in ONNX format and read them here in using OpenCV::dnn.
+This is an augmented reality (AR) application that combines real-time hand tracking with 3D rendering. The project uses OpenCV for hand detection, OpenGL for rendering, and GLFW for window management. It features a spinning Earth model, four orbiting Spitfire planes, and a moon, with interactive controls and AR integration. The hand detection model was trained in Python using YOLOv11n/s. See here: [Hand Detector](https://github.com/Michael-Millard/MillHandDetector). I exported the trained YOLO models in ONNX format and read them in using OpenCV DNN.
 
 <div align="center">
   <img src="media/demo.gif" alt="SpinningGlobeAR Demo" width="50%">
@@ -10,7 +10,7 @@ This is an augmented reality (AR) application that combines real-time hand track
 
 - **3D Rendering**:
   - Realistic Earth model with spinning animation.
-  - Four Spitfire planes orbiting the Earth, spaced 120 degrees apart, with independently spinning propellers.
+  - Four Spitfire planes orbiting the Earth, spaced 90 degrees apart, with independently spinning propellers.
   - A moon orbiting the Earth with realistic orientation, ensuring the same side always faces the Earth.
   - Customizable textures and shaders for enhanced visuals.
 
