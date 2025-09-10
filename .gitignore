@@ -9,4 +9,6 @@ detection_models/
 onnx_models/
 
 # Demo video
-media/demo.avi
+media/*.avi
+media/*.mp4
+media/*.mov

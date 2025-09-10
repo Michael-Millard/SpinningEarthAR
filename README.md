@@ -87,7 +87,29 @@ The defaults in config.yaml are pretty good. You shouldn't need to modify parame
 - `--propeller_rps <float>`: Rotations per second of the propeller (default: 10.0).
 - `--propeller_axis <float,float,float>`: Axis of propeller rotation (default: 0.0,1.0,0.0).
 - `--config_path <string>`: Path to configuration file (default: config/config.yaml).
+- `--moon_model_path <string>`: Path to Moon model (default: models/moon.obj).
+- `--moon_orbit_radius <float>`: Orbit radius of the Moon (default: 10.0).
+- `--moon_orbit_speed_deg <float>`: Orbit speed of the Moon in degrees per second (default: 15.0).
+- `--moon_scale <float>`: Scale of the Moon model (default: 0.27).
 - `-h, --help`: Show help message and exit.
+
+## Project Structure
+
+```
+SpinningEarthAR/
+├── 3d_models/          # Contains 3D models like Earth, Spitfire, and Moon
+├── build/              # Build directory for compiled files
+├── detection_models/   # YOLO hand detection models
+├── include/            # Header files for the project
+├── media/              # Media files like demo videos and images
+├── shaders/            # Shader files for OpenGL rendering
+├── src/                # Source files for the project
+├── textures/           # Texture files for 3D models
+├── CMakeLists.txt      # CMake configuration file
+├── Makefile            # Makefile for building the project
+├── README.md           # Project documentation
+└── LICENSE             # License file
+```
 
 ## Build Instructions
 
