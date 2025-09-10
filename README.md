@@ -143,4 +143,4 @@ See [CREDITS.md](CREDITS.md) for more:
 5. Thanks to Ultralytics for the YOLOv11 nano and small models.
 
 # Licence
-MIT License
+MIT License. See [LICENSE](LICENSE) for more.
