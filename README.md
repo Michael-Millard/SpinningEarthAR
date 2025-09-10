@@ -10,7 +10,7 @@ This is an augmented reality (AR) application that combines real-time hand track
 
 - **3D Rendering**:
   - Realistic Earth model with spinning animation.
-  - Four Spitfire planes orbiting the Earth, spaced 120 degrees apart, with independently spinning propellers.
+  - Four Spitfire planes orbiting the Earth, spaced 90 degrees apart, with independently spinning propellers.
   - A moon orbiting the Earth with realistic orientation, ensuring the same side always faces the Earth.
   - Customizable textures and shaders for enhanced visuals.
 
