@@ -26,7 +26,6 @@ void processUserInput(GLFWwindow* window);
 // Global params for callback functions
 int screenWidth;
 int screenHeight;
-float earthScale;
 
 int setupGLFW(GLFWwindow** window) {
     // glfw init and configure
@@ -121,7 +120,6 @@ int main(int argc, char** argv) {
     // Set global params
     screenWidth = options.screenWidth;
     screenHeight = options.screenHeight;
-    earthScale = options.earthScale;
 
     // Window
     GLFWwindow* window = nullptr;
@@ -249,7 +247,7 @@ int main(int argc, char** argv) {
         glm::vec3 worldPos = lastEarthPos;
 
         // Slightly scale down to keep fully within the frame
-        model = glm::scale(model, glm::vec3(earthScale));
+        model = glm::scale(model, glm::vec3(options.earthScale));
         model = glm::rotate(model, glm::radians(yRot), glm::vec3(0.0f, 1.0f, 0.0f));
         model = glm::translate(glm::mat4(1.0f), worldPos) * model;
 
