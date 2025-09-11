@@ -37,3 +37,9 @@ spitfire_orbit_speed_deg: 60.0
 spitfire_scale: 0.3
 propeller_rps: 2.0
 propeller_axis: [0.0, 0.21443, 3.382]
+
+# Shader paths
+earth_vertex_shader_path: "shaders/earth_shader.vs"
+earth_fragment_shader_path: "shaders/earth_shader.fs"
+bg_vertex_shader_path: "shaders/bg_quad.vs"
+bg_fragment_shader_path: "shaders/bg_quad.fs"

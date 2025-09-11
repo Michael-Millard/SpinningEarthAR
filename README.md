@@ -99,13 +99,15 @@ The defaults in config.yaml are pretty good. You shouldn't need to modify parame
 SpinningEarthAR/
 ├── 3d_models/          # Contains 3D models like Earth, Spitfire, and Moon
 ├── build/              # Build directory for compiled files
-├── detection_models/   # YOLO hand detection models
+├── config/             # Config YAML files
 ├── include/            # Header files for the project
 ├── media/              # Media files like demo videos and images
+├── onnx_models/        # YOLO hand detection models in ONNX format
 ├── shaders/            # Shader files for OpenGL rendering
 ├── src/                # Source files for the project
 ├── textures/           # Texture files for 3D models
 ├── CMakeLists.txt      # CMake configuration file
+├── CREDITS.md          # Credits for third-party assets and models
 ├── Makefile            # Makefile for building the project
 ├── README.md           # Project documentation
 └── LICENSE             # License file

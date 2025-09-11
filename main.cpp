@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
     }
 
     // Shaders (Background shader handled inside class)
-    Shader earthShader("shaders/earth_shader.vs", "shaders/earth_shader.fs");
+    Shader earthShader(options.earthVertexShaderPath.c_str(), options.earthFragmentShaderPath.c_str());
 
     // Models
     Model earthModel(options.earthModelPath, "Earth");
@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
     }
 
     // Background Quad
-    BackgroundQuad bgQuad("shaders/bg_quad.vs", "shaders/bg_quad.fs");
+    BackgroundQuad bgQuad(options.bgVertexShaderPath, options.bgFragmentShaderPath);
     bgQuad.initialize();
 
     // Render loop
@@ -388,10 +388,12 @@ int main(int argc, char** argv) {
 
 // Process keyboard inputs
 void processUserInput(GLFWwindow* window) {
-    // Escape to exit
+    // Escape or 'x' to exit
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
-    } 
+    } else if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
+        glfwSetWindowShouldClose(window, true);
+    }
 }
 
 // Window size change callback

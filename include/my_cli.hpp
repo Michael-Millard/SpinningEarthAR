@@ -44,6 +44,12 @@ struct CLIOptions {
     float propellerRps{2.0f};
     glm::vec3 propellerAxis{0.0f, 0.21443f, 3.382f};
 
+    // Shader paths
+    std::string earthVertexShaderPath{"shaders/earth_shader.vs"};
+    std::string earthFragmentShaderPath{"shaders/earth_shader.fs"};
+    std::string bgVertexShaderPath{"shaders/bg_quad.vs"};
+    std::string bgFragmentShaderPath{"shaders/bg_quad.fs"};
+
     // Other CLI params
     std::string configPath{"config/config.yaml"}; // Default config path
     bool show_help{false};
@@ -98,6 +104,12 @@ struct CLIOptions {
                 propellerAxis = glm::vec3(axis[0], axis[1], axis[2]);
             }
         }
+
+        // Shader paths
+        if (config["earth_vertex_shader_path"]) earthVertexShaderPath = config["earth_vertex_shader_path"].as<std::string>();
+        if (config["earth_fragment_shader_path"]) earthFragmentShaderPath = config["earth_fragment_shader_path"].as<std::string>();
+        if (config["bg_vertex_shader_path"]) bgVertexShaderPath = config["bg_vertex_shader_path"].as<std::string>();
+        if (config["bg_fragment_shader_path"]) bgFragmentShaderPath = config["bg_fragment_shader_path"].as<std::string>();
     }
 };
 
@@ -126,6 +138,10 @@ struct CLIOptions {
 //   --spitfire_scale <float>
 //   --propeller_rps <float>
 //   --propeller_axis <float,float,float>
+//   --earth_vertex_shader_path <string>
+//   --earth_fragment_shader_path <string>
+//   --bg_vertex_shader_path <string>
+//   --bg_fragment_shader_path <string>
 //   --config_path <string> 
 //   --show_help
 CLIOptions parseCli(int argc, char** argv);

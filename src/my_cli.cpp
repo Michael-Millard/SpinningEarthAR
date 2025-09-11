@@ -261,6 +261,30 @@ CLIOptions parseCli(int argc, char** argv) {
             } else {
                 std::cerr << "Missing value for --propeller_axis\n";
             }
+        } else if (isFlag(a, "--earth_vertex_shader_path", "--earth_vs")) {
+            if (i + 1 < args.size()) {
+                opts.earthVertexShaderPath = args[++i];
+            } else {
+                std::cerr << "Missing value for --earth_vertex_shader_path\n";
+            }
+        } else if (isFlag(a, "--earth_fragment_shader_path", "--earth_fs")) {
+            if (i + 1 < args.size()) {
+                opts.earthFragmentShaderPath = args[++i];
+            } else {
+                std::cerr << "Missing value for --earth_fragment_shader_path\n";
+            }
+        } else if (isFlag(a, "--bg_vertex_shader_path", "--bg_vs")) {
+            if (i + 1 < args.size()) {
+                opts.bgVertexShaderPath = args[++i];
+            } else {
+                std::cerr << "Missing value for --bg_vertex_shader_path\n";
+            }
+        } else if (isFlag(a, "--bg_fragment_shader_path", "--bg_fs")) {
+            if (i + 1 < args.size()) {
+                opts.bgFragmentShaderPath = args[++i];
+            } else {
+                std::cerr << "Missing value for --bg_fragment_shader_path\n";
+            }
         } else if (isFlag(a, "--config_path", "--config")) {
             if (i + 1 < args.size()) {
                 opts.configPath = args[++i];
@@ -294,12 +318,19 @@ void printHelp(const char* prog) {
         << "  --init_position <float,float,float>       Initial camera position (default: 0.0,0.0,3.0)\n"
         << "  --earth_model_path <string>               Path to Earth model (default: models/earth.obj)\n"
         << "  --earth_scale <float>                     Scale of the Earth model (default: 1.0)\n"
+        << "  --moon_model_path <string>                Path to Moon model (default: models/moon.obj)\n"
+        << "  --moon_orbit_radius <float>               Orbit radius of Moon (default: 8.0)\n"
+        << "  --moon_orbit_speed_deg <float>            Orbit speed of Moon in degrees per second (default: 10.0)\n"
         << "  --spitfire_model_path <string>            Path to Spitfire model (default: models/spitfire.obj)\n"
         << "  --spitfire_orbit_radius <float>           Orbit radius of Spitfire (default: 5.0)\n"
         << "  --spitfire_orbit_speed_deg <float>        Orbit speed of Spitfire in degrees per second (default: 30.0)\n"
         << "  --spitfire_scale <float>                  Scale of the Spitfire model (default: 0.5)\n"
         << "  --propeller_rps <float>                   Rotations per second of the propeller (default: 10.0)\n"
         << "  --propeller_axis <float,float,float>      Axis of propeller rotation (default: 0.0,1.0,0.0)\n"
+        << "  --earth_vertex_shader_path <string>       Path to Earth vertex shader (default: shaders/earth_shader.vs)\n"
+        << "  --earth_fragment_shader_path <string>     Path to Earth fragment shader (default: shaders/earth_shader.fs)\n"
+        << "  --bg_vertex_shader_path <string>          Path to background vertex shader (default: shaders/bg_quad.vs)\n"
+        << "  --bg_fragment_shader_path <string>        Path to background fragment shader (default: shaders/bg_quad.fs)\n"
         << "  --config_path <string>                    Path to configuration file (default: config/config.yaml)\n"
         << "  -h, --help                                Show this help message and exit\n"
         << std::endl;
