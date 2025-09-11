@@ -176,7 +176,7 @@ int main(int argc, char** argv) {
     float deltaTime = 0.0f;
     float prevFrame = 0.0f;
     float elapsedTime = 0.0f;
-    glm::vec3 lastEarthPos = glm::vec3(0.0f);
+    glm::vec3 earthPos = glm::vec3(0.0f);
     cv::Point2i prevPalmPos(screenWidth / 2, screenHeight / 2);
     while (!glfwWindowShouldClose(window))
     {
@@ -194,10 +194,8 @@ int main(int argc, char** argv) {
         yRot += 20.0f * deltaTime;
         yRot = fmodf(yRot, 360.0f);
 
-        // Exit on ESC or 'x'
-        if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
-            glfwSetWindowShouldClose(window, true);
-        }
+        // Process user input
+        processUserInput(window);
 
         // Update webcam texture (and optionally overlay hands) at most ~30 fps
         std::vector<HandResult> hands;
@@ -238,18 +236,16 @@ int main(int argc, char** argv) {
                     glm::vec2 palmVideoPx(handPalmPos.x, handPalmPos.y - 15); // Small nudge higher (+Y axis is down in image coords)
                     glm::ivec2 winSize(screenWidth, screenHeight);
                     glm::vec2 palmWinPx = palmVideoPx; // assuming webcam fills window; adjust if letterboxed
-                    glm::vec3 worldPos = screenToWorldOnPlane(view, projection, winSize.x, winSize.y, palmWinPx, options.initPosition.z);
-                    lastEarthPos = worldPos;
+                    earthPos = screenToWorldOnPlane(view, projection, winSize.x, winSize.y, palmWinPx, options.initPosition.z);
                 }
                 prevPalmPos = handPalmPos;
             }
         } 
-        glm::vec3 worldPos = lastEarthPos;
 
         // Slightly scale down to keep fully within the frame
         model = glm::scale(model, glm::vec3(options.earthScale));
         model = glm::rotate(model, glm::radians(yRot), glm::vec3(0.0f, 1.0f, 0.0f));
-        model = glm::translate(glm::mat4(1.0f), worldPos) * model;
+        model = glm::translate(glm::mat4(1.0f), earthPos) * model;
 
         // Set shader uniforms
         earthShader.use();
@@ -263,8 +259,8 @@ int main(int argc, char** argv) {
         earthShader.setFloat("shininess", 32.0f);
         earthModel.draw(earthShader);
 
-        // Earth transform without scale: translation to worldPos and Earth rotation
-        glm::mat4 earthTR = glm::translate(glm::mat4(1.0f), worldPos) *
+        // Earth transform without scale: translation to earthPos and Earth rotation
+        glm::mat4 earthTR = glm::translate(glm::mat4(1.0f), earthPos) *
                             glm::rotate(glm::mat4(1.0f), glm::radians(yRot), glm::vec3(0.0f, 1.0f, 0.0f));
 
         // Orbit in Earth's local XZ plane (equator)
